@@ -265,3 +265,131 @@ WHERE
 
 결국 이번 내용에서 내가 이해한 `INNER JOIN`은 **따로 관리하고 있는 테이블의 데이터를 공통된 값을 기준으로 연결하고, 필요한 정보만 하나의 조회 결과로 만드는 방법**이다.
 
+---
+
+## 10. 어떤 테이블을 먼저 적을지 정하는 기준
+
+`INNER JOIN`은 같은 조건으로 두 테이블을 연결한다면 테이블의 작성 순서를 바꿔도 서로 매칭되는 데이터는 동일하다.
+
+그래서 작성 순서 자체보다 **이번 조회에서 어떤 데이터를 기준으로 보고 있는지**를 먼저 생각하는 편이 이해하기 쉽다.
+
+예를 들어 주문 정보를 중심으로 고객 정보를 함께 보고 싶다면 다음과 같이 작성할 수 있다.
+
+```sql
+FROM orders
+JOIN users
+```
+
+반대로 고객을 먼저 보고 그 고객의 주문 정보를 연결하고 싶다면 순서를 바꿔서 작성할 수 있다.
+
+```sql
+FROM users
+JOIN orders
+```
+
+이번 예제는 완료된 주문과 해당 주문의 고객 정보를 확인하는 내용이므로 `orders`를 먼저 두는 형태로 볼 수 있다.
+
+---
+
+## 11. 긴 테이블 이름을 줄여서 사용하기
+
+조인을 사용하면 여러 테이블의 컬럼을 함께 다루기 때문에 다음처럼 테이블 이름을 계속 적게 된다.
+
+```text
+users.user_id
+users.name
+orders.order_date
+orders.status
+```
+
+이런 반복을 줄이기 위해 테이블에 짧은 이름을 붙여서 사용할 수 있다.
+
+```sql
+SELECT
+    u.user_id,
+    u.name,
+    o.order_date
+FROM orders AS o
+INNER JOIN users AS u
+    ON o.user_id = u.user_id
+WHERE o.status = 'COMPLETED';
+```
+
+여기서는 다음과 같이 별칭을 붙였다.
+
+```text
+orders → o
+users  → u
+```
+
+별칭을 지정한 뒤에는 원래 테이블 이름 대신 별칭으로 컬럼을 표현할 수 있다.
+
+```text
+orders.status → o.status
+users.name    → u.name
+```
+
+즉 같은 테이블 이름을 계속 반복하지 않고 더 짧게 작성할 수 있다.
+
+---
+
+## 12. AS 없이 별칭 붙이기
+
+테이블에 별칭을 붙일 때 `AS`는 생략할 수 있다.
+
+다음 두 표현은 같은 의미다.
+
+```sql
+FROM orders AS o
+```
+
+```sql
+FROM orders o
+```
+
+따라서 앞의 조인 쿼리도 다음처럼 작성할 수 있다.
+
+```sql
+SELECT
+    u.user_id,
+    u.name,
+    o.order_date
+FROM orders o
+INNER JOIN users u
+    ON o.user_id = u.user_id
+WHERE o.status = 'COMPLETED';
+```
+
+테이블 이름 뒤에 별칭을 바로 적어도 같은 방식으로 사용할 수 있다.
+
+---
+
+## 13. INNER JOIN을 JOIN으로 줄여 쓰기
+
+`INNER JOIN`에서 `INNER`도 생략할 수 있다.
+
+```sql
+SELECT
+    u.user_id,
+    u.name,
+    o.order_date
+FROM orders o
+JOIN users u
+    ON o.user_id = u.user_id
+WHERE o.status = 'COMPLETED';
+```
+
+여기서 `JOIN`은 앞에서 사용한 `INNER JOIN`과 같은 의미다.
+
+이번 내용에서 생략할 수 있는 표현만 정리하면 다음과 같다.
+
+```text
+orders AS o  → orders o
+users AS u   → users u
+
+INNER JOIN   → JOIN
+```
+
+결국 같은 내부 조인이라도 테이블 별칭을 사용하고 생략 가능한 표현을 줄이면 쿼리를 더 간결하게 작성할 수 있다.
+
+
