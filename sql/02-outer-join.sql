@@ -135,3 +135,105 @@ SELECT
     o.user_id AS orders_user_id
 FROM users u
 JOIN orders o ON u.user_id = o.user_id;
+
+SELECT *
+FROM employees;
+
+/*
+아래 두 쿼리의 차이는?
+*/
+SELECT *
+FROM employees e
+JOIN employees m ON e.manager_id = m.employee_id;
+
+SELECT *
+FROM employees e
+JOIN employees m ON e.employee_id = m.manager_id;
+
+
+/*
+아래 두 쿼리의 차이는?
+*/
+SELECT
+	e.name AS employee_name,
+    m.name AS manager_name
+FROM employees e
+JOIN employees m ON e.employee_id = m.manager_id;
+
+
+SELECT
+	e.name AS employee_name,
+    m.name AS manager_name
+FROM employees e
+LEFT JOIN employees m on e.manager_id = m.employee_id;
+
+SELECT *
+FROM sizes;
+
+SELECT
+	s.size,
+    c.color
+FROM sizes s
+CROSS JOIN colors c;
+
+SELECT *
+FROM colors;
+
+SELECT
+	CONCAT('기본티셔츠-', c.color, '-', s.size) AS product_name,
+    s.size,
+    c.color
+FROM sizes s
+CROSS JOIN colors c
+ORDER BY product_name ASC;
+
+CREATE TABLE product_options (
+	option_id BIGINT AUTO_INCREMENT,
+    product_name VARCHAR(255) NOT NULL,
+    size VARCHAR(10) NOT NULL,
+    color VARCHAR(20) NOT NULL,
+    PRIMARY KEY (option_id)
+);
+
+
+INSERT INTO product_options (product_name, size, color)
+SELECT
+	CONCAT('기본티셔츠-', c.color, '-', s.size) AS product_name,
+    s.size,
+    c.color
+FROM sizes s
+CROSS JOIN colors c;
+
+SELECT *
+FROM product_options;
+
+/*
+2025년 6월에 '서울'에 거주하는 고객이 주문한 모든 내역에 대해,
+고객 이름, 고객 이메일, 주문 날짜, 주문한 상품 명, 주문한 상품 가격, 주문 수량을 포함하는
+상세 보고서를 최신 주문순으로 작성하라.
+*/
+
+-- users, products, orders, employees, sizes, colors
+
+SELECT *
+FROM users;
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM products;
+
+SELECT
+	u.name AS `고객 이름`,
+    u.email AS `고객 이메일`,
+    o.order_date AS `주문 날짜`,
+    p.name AS `주문한 상품 명`,
+    p.price AS `주문한 상품 가격`,
+    o.quantity AS `주문 수량`
+FROM users u
+JOIN orders o ON u.user_id = o.user_id
+JOIN products p ON o.product_id = p.product_id
+WHERE u.address LIKE '서울%'
+AND o.order_date >= '2025-06-01' AND o.order_date < '2025-07-01'
+ORDER BY o.order_date DESC;
