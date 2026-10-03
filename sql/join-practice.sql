@@ -26,7 +26,7 @@ AND o.order_id IS NULL;
 2.
 모든 고객의 이름과 각 고객이 주문한 총 횟수를 조회하는 SQL을 작성해라.
 주문을 한 번도 하지 않은 고객은 주문 횟수가 0으로 표시되어야 한다.
-결과는 고객 이름으로 오름차순 정렬해라. (아직 미해결)
+결과는 고객 이름으로 오름차순 정렬해라.
 */
 
 SELECT *
@@ -35,11 +35,14 @@ LEFT JOIN orders o ON u.user_id = o.user_id;
 
 SELECT
 	u.name AS '고객 이름',
-    IFNULL(COUNT(*), 0) AS 'order_count'
+    IFNULL(COUNT(o.order_id), 0) AS 'order_count'
 FROM users u
 LEFT JOIN orders o ON u.user_id = o.user_id
 GROUP BY u.name
 ORDER BY u.name ASC;
+
+-- 원래는 CONUT(*)로 했었는데 이건 주문 건수를 카운트 하는건데 주문을 안한 고객은 order_id가 NULL이므로
+-- IFNULL(COUNT(o.order_id, 0)) 로 수정.
 
 /*
 3.
