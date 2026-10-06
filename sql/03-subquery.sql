@@ -274,3 +274,46 @@ SELECT
 FROM products p
 LEFT JOIN orders o ON p.product_id = o.product_id
 GROUP BY p.product_id, p.name, p.price;
+
+SELECT category,
+       MAX(price)
+FROM products
+GROUP BY category;
+
+SELECT category,
+	   name,
+       MAX(price)
+FROM products
+GROUP BY category;
+
+SELECT category,
+       MAX(price) AS max_price
+FROM products
+GROUP BY category;
+
+SELECT
+    p.product_id,
+    p.name,
+    p.price
+FROM products p
+JOIN (SELECT category,
+             MAX(price) AS `max_price`
+      FROM products
+      GROUP BY category) cmp ON p.category = cmp.category AND p.price = cmp.max_price;
+
+/*
+서울에 거주하는 모든 고객들의 주문 목록을 조회하시오.
+(서브쿼리 이용)
+*/
+
+SELECT *
+FROM orders o
+WHERE o.user_id IN (SELECT u.user_id
+					FROM users u
+					WHERE u.address LIKE '서울%');
+
+/* (조인) */
+SELECT o.*
+FROM orders o
+JOIN users u ON o.user_id = u.user_id
+WHERE u.address LIKE '서울%';
