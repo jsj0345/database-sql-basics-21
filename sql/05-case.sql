@@ -95,4 +95,16 @@ SELECT
  (SELECT COUNT(*) FROM orders WHERE status = 'COMPLETED') AS
 completed_count,
  (SELECT COUNT(*) FROM orders WHERE status = 'SHIPPED') AS shipped_count,
- (SELECT COUNT(*) FROM orders WHERE status = 'PENDING') AS pending_count;
+ (SELECT COUNT(*) FROM orders WHERE status = 'PENDING') AS pending_count
+FROM orders;
+
+SELECT
+	p.category,
+	COUNT(*) AS total_orders,
+    SUM(CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_count,
+    SUM(CASE WHEN status = 'SHIPPED' THEN 1 ELSE 0 END) AS shipped_count,
+    SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) AS pending_count
+FROM orders o
+JOIN products p ON o.product_id = p.product_id
+GROUP BY p.category;
+
