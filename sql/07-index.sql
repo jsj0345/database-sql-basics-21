@@ -119,3 +119,43 @@ FROM items
 WHERE item_name LIKE '%게이밍%';
 
 DROP INDEX idx_items_price ON items;
+
+-- 10/20 추가
+
+EXPLAIN
+SELECT *
+FROM items
+ORDER BY stock_quantity;
+
+SELECT *
+FROM items
+WHERE price BETWEEN 50000 AND 100000
+ORDER BY price;
+
+EXPLAIN
+SELECT *
+FROM items
+WHERE price BETWEEN 50000 AND 100000
+ORDER BY price;
+
+SELECT *
+FROM items
+WHERE price BETWEEN 50000 AND 100000;
+
+EXPLAIN
+SELECT *
+FROM items
+WHERE price BETWEEN 50000 AND 100000
+ORDER BY price DESC;
+
+DROP INDEX idx_items_price ON items;
+
+CREATE INDEX idx_items_price ON items(price DESC);
+
+SELECT *
+FROM items
+WHERE price BETWEEN 50000 AND 100000;
+
+DROP INDEX idx_items_price ON items;
+
+CREATE INDEX idx_items_price ON items(price);
