@@ -254,3 +254,257 @@ FROM customers c
 LEFT JOIN orders o ON c.customer_id = o.customer_id
 GROUP BY c.customer_id, c.customer_name
 ORDER BY `총 주문 건수` DESC, c.customer_id ASC;
+
+/*
+15.
+각 주문 상태(`status`)별 주문 건수를 조회한다. `status`, `order_count`를 출력한다.
+*/
+SHOW TABLES;
+
+SELECT *
+FROM orders;
+
+SELECT
+	status,
+    COUNT(*) AS order_count
+FROM orders
+GROUP BY status;
+
+/*
+16.
+고객별로 **유효 주문(`COMPLETED`, `SHIPPED`)의 총 주문 금액**을 계산한다. 고객 ID, 이름, 유효 주문 건수, 총 매출액을 출력한다.
+유효 주문이 없는 고객은 제외한다.
+주문 건수를 세는 과정에서 상세 품목 수 때문에 **중복 집계되지 않도록 주의**한다.
+*/
+
+SHOW TABLES;
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM customers;
+
+SELECT *
+FROM order_items;
+
+SELECT
+	c.customer_id AS '고객 ID',
+    c.customer_name AS '이름',
+    COUNT(DISTINCT o.order_id) AS '주문 건수', -- order_items 테이블이랑 조인 할 때 , 건수를 그냥 조회하면 상세 품목 수로 인해 오버카운팅 발생으로 인한 문제 방지.
+    SUM(oi.quantity * oi.unit_price) AS 'total_sales'
+    -- GROUP BY c.customer_id, c.customer_name으로 해야 그룹핑을 할 때 컬럼 조회가 가능함.
+    -- 그리고 c.customer_id는 프라이머리 키라 외래키랑 연결할 때, 1:N의 관계가 가능해서 정상적으로 total_sales의 값이 나옴.
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.customer_id, c.customer_name;
+
+/*
+17.
+
+16번 결과 중 유효 주문 매출 합계가 **150,000원 이상**인 고객만 조회한다.
+매출액 내림차순.
+*/
+SELECT
+	c.customer_id AS '고객 ID',
+    c.customer_name AS '이름',
+    COUNT(DISTINCT o.order_id) AS '주문 건수', -- order_items 테이블이랑 조인 할 때 , 건수를 그냥 조회하면 상세 품목 수로 인해 오버카운팅 발생으로 인한 문제 방지.
+    SUM(oi.quantity * oi.unit_price) AS `매출액`
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.customer_id, c.customer_name
+HAVING SUM(oi.quantity * oi.unit_price) >= 150000
+ORDER BY `매출액` DESC;
+
+/*
+18.
+유효 주문을 기준으로 카테고리 이름, 판매 수량 합계, 매출액 합계를 출력한다. **상품 가격이 아닌 주문 상세 단가**를 사용한다.
+매출액 내림차순.
+*/
+SELECT *
+FROM products;
+
+SELECT *
+FROM categories;
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM order_items;
+
+SELECT
+	c.category_name AS '카테고리 이름',
+    SUM(oi.quantity) AS '판매수량 합계',
+    SUM(oi.quantity * oi.unit_price) AS `매출액`
+FROM order_items oi
+JOIN orders o ON oi.order_id = o.order_id
+JOIN products p ON oi.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.category_name
+ORDER BY `매출액` DESC;
+
+/*
+19.
+유효 주문이 있는 고객별로 **주문 한 건당 평균 금액**을 계산한다.
+주문 금액은 품목을 합산한 뒤 평균을 내야 한다. 고객 ID, 이름, 평균 주문 금액을 출력한다.
+소수 둘째 자리까지 반올림한다.
+*/
+
+SELECT
+	c.customer_id,
+    c.customer_name AS '고객 이름',
+    ROUND(SUM(oi.quantity * oi.unit_price) / COUNT(DISTINCT o.order_id), 2) AS '평균 주문 금액'
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN customers c ON o.customer_id = c.customer_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.customer_id, c.customer_name;
+
+-- ROUND(AVG(oi.quantity * oi.unit_price), 2) AS '평균 주문 금액' (이렇게 하면 주문 건 당이 아님.)
+
+/*
+예를 들어서, 주문을 케이크 1개(9000원), 커피 1잔(4500원) 이렇게 한다면
+13500원이니까 주문 1건임. 근데 9000원, 4500원을 각각 하나의 주문으로 인식해서 계산한 것임 위의 계산 방법이 그럼.
+*/
+
+/*
+20.
+유효 주문 기준 **2026년 7월·8월·9월·10월**의 월별 주문 건수와 매출 합계를 출력한다.
+`YYYY-MM` 형태의 월을 표시하고 시간순으로 정렬한다
+*/
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM order_items;
+
+SELECT
+	DATE_FORMAT(o.ordered_at, '%Y-%m') AS 'month',
+	COUNT(DISTINCT o.order_id) AS '월별 주문 건수', -- 여기서 DISTINCT를 쓰지 않으면 한 주문당이 아님 주문에 있는 품목 당임.
+    SUM(oi.quantity * oi.unit_price) AS '매출 합계'
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED') AND (DATE_FORMAT(o.ordered_at, '%Y-%m') >= '2026-07' AND DATE_FORMAT(o.ordered_at, '%Y-%m') < '2026-11')
+GROUP BY DATE_FORMAT(o.ordered_at, '%Y-%m') -- 년,월만 나오게 하는 함수
+ORDER BY DATE_FORMAT(o.ordered_at, '%Y-%m') ASC;
+
+/*
+21.
+모든 고객 중 **취소 주문을 포함한 전체 주문 건수**가 많은 상위 5명을 조회한다. 동률 시 고객 ID 오름차순으로 정렬한다.
+고객 ID, 이름, 주문 건수를 출력한다.
+*/
+
+SELECT
+	c.customer_id AS '고객 ID',
+    c.customer_name AS '이름',
+    COUNT(*) AS `주문 건수`
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+GROUP BY c.customer_id, c.customer_name
+ORDER BY `주문 건수` DESC, c.customer_id LIMIT 5; -- 많은 순이니까 내림 차순이면서 상위 5명.
+
+/*
+22.
+`payments`에서 `payment_status='PAID'`만 대상으로 결제 수단별 결제 건수와 결제 금액 합계를 출력한다.
+결제 금액 내림차순.
+*/
+
+SELECT *
+FROM payments;
+
+SELECT
+	payment_method AS '결제 수단',
+	COUNT(*) AS '결제 건수',
+    SUM(amount) AS '결제 금액 합계'
+FROM payments
+WHERE payment_status = 'PAID'
+GROUP BY payment_method
+ORDER BY SUM(amount) DESC;
+
+/*
+23.
+판매 중인 상품을 `CASE`로 다음처럼 분류한다.
+**3만원 미만 → '저가'**, **3만원 이상 8만원 미만 → '중가'**,
+**8만원 이상 → '고가'**. 상품명, 가격, 가격대(`price_band`)를 출력한다.
+*/
+
+SELECT *
+FROM products;
+
+SELECT
+	product_name AS '상품명',
+	price AS '가격',
+    CASE
+		WHEN price < 30000 THEN '저가'
+        WHEN price >= 30000 AND price < 80000 THEN '중가'
+        WHEN price >= 80000 THEN '고가'
+    END AS 'price_band'
+FROM products
+WHERE is_active = 1;
+
+SELECT COUNT(*)
+FROM products
+WHERE is_active = 1;
+
+/*
+24.
+주문 ID, 주문 상태 코드, 상태명을 출력한다.
+`PENDING=접수`, `SHIPPED=배송중`, `COMPLETED=완료`, `CANCELLED=취소`로 표시한다.
+*/
+
+SELECT *
+FROM orders;
+
+SELECT
+	order_id,
+    status,
+    CASE status
+		WHEN 'PENDING' THEN '접수'
+        WHEN 'SHIPPED' THEN '배송중'
+        WHEN 'COMPLETED' THEN '완료'
+        WHEN 'CANCELLED' THEN '취소'
+    END AS '주문 상태'
+FROM orders;
+
+/*
+25.
+고객별 `COMPLETED`, `SHIPPED`, `PENDING`, `CANCELLED` 주문 건수를 **각각 별도의 컬럼**으로 표시한다.
+고객 ID, 고객명, 4가지 상태별 건수를 출력한다. 주문이 없는 고객도 0건으로 표시한다.
+*/
+
+SELECT
+	c.customer_id,
+    c.customer_name,
+    SUM(CASE WHEN o.status = 'COMPLETED' THEN 1 ELSE 0 END) AS 'COMPLETED',
+    SUM(CASE WHEN o.status = 'SHIPPED' THEN 1 ELSE 0 END) AS 'SHIPPED',
+    SUM(CASE WHEN o.status = 'PENDING' THEN 1 ELSE 0 END) AS 'PENDING',
+    SUM(CASE WHEN o.status = 'CANCELLED' THEN 1 ELSE 0 END) AS 'CANCELLED'
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+GROUP BY c.customer_id, c.customer_name;
+
+/*
+26.
+카테고리별로 **완료 주문에서 판매된 수량**, **배송중 주문에서 판매된 수량**을 각각 출력한다.
+*/
+
+SELECT *
+FROM order_items;
+
+SELECT
+	c.category_name,
+    SUM(CASE WHEN o.status = 'COMPLETED' THEN oi.quantity ELSE 0 END) AS 'completed_quantity', -- 주문 건 수를 따지려는게 아니라 주문 안에 있는 수량을 따져야함.
+    SUM(CASE WHEN o.status = 'SHIPPED' THEN oi.quantity ELSE 0 END) AS 'shipped_quantity'
+FROM order_items oi
+JOIN orders o ON oi.order_id = o.order_id
+JOIN products p ON oi.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.category_name;
