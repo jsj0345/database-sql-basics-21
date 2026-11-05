@@ -508,3 +508,110 @@ JOIN products p ON oi.product_id = p.product_id
 JOIN categories c ON p.category_id = c.category_id
 WHERE o.status IN ('COMPLETED', 'SHIPPED')
 GROUP BY c.category_name;
+
+/*
+27.
+각 고객의 유효 주문 총매출에 따라 `VIP(300,000원 이상)`,
+`GOLD(150,000원 이상 300,000원 미만)`, `NORMAL(150,000원 미만)`로 분류한다.
+유효 주문이 없는 고객은 `NORMAL`이다.
+고객 ID, 이름, 총매출, 등급을 출력한다.
+*/
+
+SELECT *
+FROM customers;
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM order_items;
+
+SELECT *
+FROM orders; -- COMPLETED, SHIPPED만 유효 주문
+
+SELECT *
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+WHERE c.customer_name = '서예린';
+
+SELECT *
+FROM order_items;
+
+SELECT *
+FROM orders;
+
+SELECT
+	c.customer_id,
+    c.customer_name,
+    SUM(CASE
+			WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
+            ELSE 0 -- CASE문을 이용해서 위에 조건을 걸어둔 상태값 외에는 무조건 0으로 취급.
+         END)
+    AS total_sales,
+    CASE
+		WHEN SUM(CASE
+			WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
+            ELSE 0
+			END) >= 300000 THEN 'VIP'
+        WHEN SUM(CASE
+			WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
+            ELSE 0
+		END) >= 150000 THEN 'GOLD'
+        ELSE 'NORMAL'
+		END AS 'GRADE'  -- total_sales를 이용하지 못하니까 CASE문으로 등급 정리
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id -- 한번도 주문하지 않은 고객의 정보가 나와야하므로 LEFT JOIN을 이용한다.
+LEFT JOIN order_items oi ON o.order_id = oi.order_id -- 여기서 JOIN을 쓰면 조건에 맞는 데이터만 조회된다. LEFT JOIN 사용하기.
+GROUP BY c.customer_id, c.customer_name;
+
+/*
+28.
+전체 상품의 평균 판매 가격보다 비싼 상품의 이름, 가격을 조회한다.
+비활성 상품도 평균 계산에 포함한다.
+*/
+
+SELECT *
+FROM products;
+
+SELECT
+	product_name,
+	price
+FROM products
+WHERE price > (SELECT AVG(price)
+				FROM products);
+
+/*
+29.
+**유효 주문을 한 번이라도 생성한 고객**의 ID, 이름을 조회한다.
+결과에 고객이 중복되면 안 된다.
+*/
+
+SELECT *
+FROM orders;
+
+SELECT DISTINCT
+	c.customer_id,
+    c.customer_name
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+ORDER BY c.customer_id ASC;
+
+/*
+30.
+전체 주문 중 가장 최신 주문 시각과 동일한 시각에 주문한 고객의 ID, 이름, 주문 시각을 조회한다.
+*/
+
+SELECT *
+FROM orders;
+
+SELECT MAX(ordered_at)
+FROM orders;
+
+SELECT
+	c.customer_id AS '고객 ID',
+    c.customer_name AS '이름',
+    o.ordered_at AS '주문 시각'
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+WHERE o.ordered_at IN (SELECT MAX(ordered_at) FROM orders);
