@@ -615,3 +615,253 @@ SELECT
 FROM orders o
 JOIN customers c ON o.customer_id = c.customer_id
 WHERE o.ordered_at IN (SELECT MAX(ordered_at) FROM orders);
+
+/*
+31.
+각 상품의 가격이 자기 카테고리 상품 평균 가격보다 높은 상품만 조회한다.
+상품명, 카테고리 ID, 가격을 출력한다.
+*/
+
+SHOW TABLES;
+
+SELECT *
+FROM products;
+
+SELECT *
+FROM categories;
+
+SELECT
+	   p.product_name AS '상품명',
+	   p.category_id,
+       p.price AS '가격'
+FROM products p
+JOIN (SELECT
+			category_id,
+            AVG(price) AS '평균가'
+		FROM products
+        GROUP BY category_id) cmp ON p.category_id = cmp.category_id
+WHERE p.price > cmp.평균가;
+
+/*
+33.
+유효 주문의 주문 ID, 고객 ID, 주문 시각, 주문 상태, 주문 총액을 반환하는 v_valid_order_totals VIEW를 만든다.
+생성 뒤 VIEW에서 금액이 가장 큰 주문 5개를 조회한다.
+뷰의 SELECT에 주문 상세를 합산해야 한다.
+*/
+
+SHOW TABLES;
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM order_items;
+
+
+CREATE VIEW v_valid_order_totals AS (
+SELECT
+	o.order_id,
+    c.customer_id,
+    o.ordered_at,
+    o.status,
+    cmp.주문당금액
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+JOIN (SELECT
+			order_id,
+            SUM(unit_price * quantity) AS '주문당금액'
+		FROM order_items
+        GROUP BY order_id) cmp ON o.order_id = cmp.order_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+);
+
+DROP VIEW IF EXISTS v_valid_order_totals;
+
+SELECT *
+FROM v_valid_order_totals
+ORDER BY 주문당금액 DESC LIMIT 5;
+
+/*
+34.
+주문 화면에서 customer_id = 2이고 ordered_at이 2026년 7월 1일 이상 2026년 10월 1일 미만인 주문을 최신순으로 조회한다고 가정한다.
+(1) 조회 SQL 작성,
+(2) EXPLAIN 실행,
+(3) orders(customer_id, ordered_at) 복합 인덱스 생성,
+(4) EXPLAIN 재실행. 어떤 인덱스가 후보에 올라왔는지 비교한다.
+샘플 데이터가 작아 옵티마이저가 인덱스를 선택하지 않을 수도 있다.
+*/
+
+SELECT *
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+WHERE c.customer_id = 2 AND (DATE(ordered_at) >= '2026-07-01' AND DATE(ordered_at) < '2026-10-01')
+ORDER BY o.ordered_at DESC;
+
+EXPLAIN
+SELECT *
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+WHERE c.customer_id = 2 AND (DATE(ordered_at) >= '2026-07-01' AND DATE(ordered_at) < '2026-10-01')
+ORDER BY o.ordered_at DESC;
+
+CREATE INDEX ordered_at_idx ON orders(customer_id, ordered_at DESC);
+
+EXPLAIN
+SELECT *
+FROM orders o
+JOIN customers c ON o.customer_id = c.customer_id
+WHERE c.customer_id = 2 AND (DATE(ordered_at) >= '2026-07-01' AND DATE(ordered_at) < '2026-10-01')
+ORDER BY o.ordered_at DESC;
+
+/*
+35.
+제품 ID가 10인 상품의 재고를 3개 차감한다.
+단, 재고가 3개 이상일 때만 차감되도록 쿼리를 작성한다.
+차감 직후 SELECT로 재고를 확인한다.
+반복 실행 시 재고가 계속 줄어들 수 있으니 주의한다.
+*/
+
+SELECT *
+FROM products;
+
+UPDATE products
+SET stock = stock - 3
+WHERE stock >= 3 AND product_id = 10;
+
+SELECT *
+FROM products
+WHERE product_id = 10;
+
+/*
+36.
+- 등록된 모든 상품 카테고리에 속한 상품들을 단 한 번이라도 유효 주문에
+포함시켜 구매해 본 적이 있는 고객을 찾는다.
+
+- 해당 조건을 만족하는 customer_id, customer_name, email을 조회한다.
+
+- 정렬 조건은 customer_id 오름차순이다.
+*/
+
+SELECT *
+FROM order_items;
+
+SELECT *
+FROM orders;
+
+SELECT *
+FROM customers;
+
+SELECT *
+FROM categories;
+
+SELECT *
+FROM products;
+
+SELECT DISTINCT
+	c.customer_id,
+    c.customer_name,
+    c.email
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+-- JOIN categories ca ON p.category_id = ca.category_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.customer_id, c.customer_name, c.email
+HAVING COUNT(DISTINCT p.category_id) >= 4 -- 이렇게 작성을 해야 고객이 주문한 카테고리가 중복으로 카운트 안된다.
+ORDER BY c.customer_id ASC;
+
+/*
+37. 지역별 평균 매출을 초과한 고객 조회
+
+쇼핑몰에서는 지역별 고객의 구매 실적을 비교하려고 한다.
+각 고객의 유효 주문 총매출이 해당 고객이 속한 지역의 고객 1인당 평균 유효 매출보다 높은 고객을 조회한다.
+
+요구사항은 다음과 같다.
+- 유효 주문은 COMPLETED, SHIPPED만 인정한다.
+- 유효 주문이 없는 고객도 지역 평균 계산에 포함하며, 해당 고객의 매출은 0원으로 취급한다.
+- 지역 평균은 해당 지역 전체 고객의 유효 매출 합계를 해당 지역 전체 고객 수로 나눈 값이다.
+- 자신의 지역 평균보다 매출이 높은 고객만 인정한다.
+- 지역 평균 매출은 소수점 둘째 자리까지 반올림하여 출력한다.
+- 총매출 내림차순으로 정렬하고, 동률이면 고객 ID 오름차순으로 정렬한다.
+
+출력 컬럼은 다음과 같다.
+- customer_id, customer_name, region, total_sales, region_avg_sales
+*/
+
+SELECT *
+FROM customers;
+
+SELECT *
+FROM order_items;
+
+SELECT *
+FROM products;
+
+SELECT *
+FROM orders;
+
+/*
+SELECT *
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN (SELECT
+	c.region,
+	ROUND((SUM(CASE
+		WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
+        ELSE 0
+        END) / COUNT(c.customer_id)), 2)
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+LEFT JOIN order_items oi ON o.order_id = oi.order_id
+-- WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.region) cmp ON cmp.region = c.region
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+*/
+
+SELECT
+	c.customer_id,
+    c.customer_name,
+    c.region,
+    SUM(oi.unit_price * oi.quantity),
+    `지역별 매출`
+FROM customers c
+JOIN orders o ON c.customer_id = o.customer_id
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN (SELECT
+	c.region,
+	ROUND((SUM(CASE
+		WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
+        ELSE 0
+        END) / COUNT(c.customer_id)), 2) AS `지역별 매출`
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+LEFT JOIN order_items oi ON o.order_id = oi.order_id
+-- WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.region) cmp ON cmp.region = c.region
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.customer_id, c.customer_name, c.region, `지역별 매출`;
+
+-- 지역별 평균 매출 금액 (소수점 아래 둘째 자리까지만)
+SELECT
+	c.region,
+	ROUND((SUM(CASE
+		WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
+        ELSE 0
+        END) / COUNT(c.customer_id)), 2)
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+LEFT JOIN order_items oi ON o.order_id = oi.order_id
+-- WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.region;
+
+SELECT *
+FROM customers;
+
+SELECT *
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+LEFT JOIN order_items oi ON o.order_id = oi.order_id
+WHERE c.region = '대전';
+
