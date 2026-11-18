@@ -824,7 +824,7 @@ SELECT
 	c.customer_id,
     c.customer_name,
     c.region,
-    SUM(oi.unit_price * oi.quantity),
+    SUM(oi.unit_price * oi.quantity) AS '총 매출',
     `지역별 매출`
 FROM customers c
 JOIN orders o ON c.customer_id = o.customer_id
@@ -834,14 +834,16 @@ JOIN (SELECT
 	ROUND((SUM(CASE
 		WHEN o.status IN ('COMPLETED', 'SHIPPED') THEN oi.unit_price * oi.quantity
         ELSE 0
-        END) / COUNT(c.customer_id)), 2) AS `지역별 매출`
+        END) / COUNT(DISTINCT c.customer_id)), 2) AS `지역별 매출` -- 여기서 DISTINCT를 작성해서 평균 매출을 정상적으로 나오게한다. c.customer_id가 여러번 등록된다.
 FROM customers c
 LEFT JOIN orders o ON c.customer_id = o.customer_id
-LEFT JOIN order_items oi ON o.order_id = oi.order_id
+LEFT JOIN order_items oi ON o.order_id = oi.order_id -- customer_id 여러번 중복
 -- WHERE o.status IN ('COMPLETED', 'SHIPPED')
 GROUP BY c.region) cmp ON cmp.region = c.region
 WHERE o.status IN ('COMPLETED', 'SHIPPED')
-GROUP BY c.customer_id, c.customer_name, c.region, `지역별 매출`;
+GROUP BY c.customer_id, c.customer_name, c.region, `지역별 매출`
+HAVING SUM(oi.unit_price * oi.quantity) > `지역별 매출`
+ORDER BY `총 매출` DESC, c.customer_id ASC;
 
 -- 지역별 평균 매출 금액 (소수점 아래 둘째 자리까지만)
 SELECT
@@ -865,3 +867,124 @@ LEFT JOIN orders o ON c.customer_id = o.customer_id
 LEFT JOIN order_items oi ON o.order_id = oi.order_id
 WHERE c.region = '대전';
 
+/*
+38. 카테고리별 매출 1위 상품 조회
+
+쇼핑몰에서는 각 카테고리에서 가장 높은 매출을 기록한 상품을 파악하려고 한다.
+
+카테고리별로 유효 주문 매출액이 가장 높은 상품을 조회한다.
+
+요구사항
+- 유효 주문은 COMPLETED, SHIPPED만 인정한다.
+- 매출액은 주문 당시 단가(unit_price)와 수량(quantity)을 기준으로 계산한다.
+- 상품의 현재 판매 가격(products.price)은 매출 계산에 사용하지 않는다.
+- 한 상품이 여러 주문에 포함되어 있다면 모든 유효 주문의 매출을 합산한다.
+- 유효 주문 이력이 없는 상품의 매출은 0원으로 취급한다.
+- 카테고리 내에서 매출액이 가장 높은 상품만 조회한다.
+- 매출액이 동일한 공동 1위 상품이 있다면 모두 조회해야 한다.
+- 카테고리 ID 오름차순, 동일 카테고리 내에서는 상품 ID 오름차순으로 정렬한다.
+
+출력 컬럼
+category_id, category_name, product_id, product_name, total_quantity, total_sales
+*/
+
+/*
+내일 다시 해결 해 볼 것.
+지금 문제점 -> 카테고리별 최고 매출 뽑아내지 못함.
+		 -> 카테고리 아이디를 기반으로 조인을 했을 때 말도 안되는 양의 데이터가 나옴.
+         -> 공동 1위 상품이 있을 때 모두 조회 해결 x
+*/
+
+SELECT
+	c.category_id,
+	c.category_name,
+	p.product_id,
+	p.product_name,
+	cmp.total_quantity,
+	cmp.total_sales,
+	o.status,
+	o.order_id
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+JOIN (SELECT
+			c2.category_id,
+            c2.category_name,
+            p2.product_name,
+            SUM(oi2.quantity) AS `total_quantity`, -- 주문을 취소하든 PENDING 상태든 QUANTITY는 그대로 두기. (매출액만 0으로)
+            SUM(CASE
+					WHEN o2.status IN ('COMPLETED', 'SHIPPED') THEN oi2.unit_price * oi2.quantity
+                    ELSE 0
+				END) AS `total_sales`
+		FROM orders o2
+		JOIN order_items oi2 ON o2.order_id = oi2.order_id
+		JOIN products p2 ON oi2.product_id = p2.product_id
+		JOIN categories c2 ON p2.category_id = c2.category_id
+        GROUP BY c2.category_id, c2.category_name, p2.product_name
+        ORDER BY c2.category_id ASC, total_sales DESC) cmp ON c.category_id = cmp.category_id;
+
+SELECT *
+FROM products;
+
+SELECT *
+FROM order_items;
+
+SELECT *
+FROM categories;
+
+SELECT *
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id; -- order_id를 외래키로 쓰기 때문에 한 주문에 어떤 물품을 주문했는지 다 볼 수 있다.
+
+SELECT *
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+ORDER BY o.order_id, oi.order_item_id;
+
+/*
+SELECT *
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+WHERE o.status IN ('COMPLETED', 'SHIPPED')
+GROUP BY c.category_id, c.category_name
+*/
+
+SELECT *
+FROM order_items;
+
+SELECT *
+FROM products;
+
+/*
+SELECT
+	DISTINCT c.category_id, c.category_name, p.product_id, p.product_name, cmp.total_quantity, cmp.total_sales, o.status, o.order_id
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id
+JOIN products p ON oi.product_id = p.product_id
+JOIN categories c ON p.category_id = c.category_id
+JOIN (SELECT
+			c2.category_id,
+            c2.category_name,
+            p2.product_name,
+            SUM(oi2.quantity) AS `total_quantity`,
+            SUM(oi2.unit_price * oi2.quantity) AS `total_sales`
+		FROM orders o2
+		JOIN order_items oi2 ON o2.order_id = oi2.order_id
+		JOIN products p2 ON oi2.product_id = p2.product_id
+		JOIN categories c2 ON p2.category_id = c2.category_id
+        WHERE o2.status IN ('COMPLETED', 'SHIPPED')
+        GROUP BY c2.category_id, c2.category_name, p2.product_name
+        ORDER BY SUM(oi2.unit_price * oi2.quantity) DESC) cmp ON c.category_id = cmp.category_id;
+*/
+
+-- 카테고리 아이디와 카테고리 이름으로 묶어서 가장 매출액 높은 물품 뽑아내기
+
+
+SELECT *
+FROM orders o
+JOIN order_items oi ON o.order_id = oi.order_id;
