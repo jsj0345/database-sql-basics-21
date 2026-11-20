@@ -895,6 +895,52 @@ category_id, category_name, product_id, product_name, total_quantity, total_sale
          -> 공동 1위 상품이 있을 때 모두 조회 해결 x
 */
 
+-- WITH를 사용한 이유 => total_sales를 재사용하기 위함.
+WITH category_products_total_sales AS (
+SELECT
+	c.category_id,
+	c.category_name,
+	cmp.product_id,
+	cmp.product_name,
+	cmp.total_quantity,
+    cmp.total_sales
+FROM categories c
+-- JOIN order_items oi ON o.order_id = oi.order_id 여기서 JOIN을 쓰지 않은 이유는 과다하게 데이터가 중복 될 수 있어서 주석 처리함.
+-- JOIN products p ON oi.product_id = p.product_id
+-- JOIN categories c ON p.category_id = c.category_id
+JOIN (SELECT
+			c2.category_id,
+            c2.category_name,
+            p2.product_id,
+            p2.product_name,
+            SUM(CASE
+					WHEN o2.status IN ('COMPLETED', 'SHIPPED') THEN oi2.quantity
+                    ELSE 0
+				END) AS `total_quantity`, -- 주문을 취소한것도 0으로 취급. 유효 주문이 아니므로.
+            SUM(CASE
+					WHEN o2.status IN ('COMPLETED', 'SHIPPED') THEN oi2.unit_price * oi2.quantity
+                    ELSE 0
+				END) AS `total_sales`
+		FROM orders o2
+		JOIN order_items oi2 ON o2.order_id = oi2.order_id
+		RIGHT JOIN products p2 ON oi2.product_id = p2.product_id -- 여기서 RIGHT JOIN을 사용한 이유는 아예 주문하지 않은 상품도 매출 0으로 포함시켜야 하기 때문.
+		JOIN categories c2 ON p2.category_id = c2.category_id
+        GROUP BY c2.category_id, c2.category_name, p2.product_id, p2.product_name
+        ORDER BY c2.category_id ASC, total_sales DESC) cmp ON c.category_id = cmp.category_id
+)
+
+SELECT *
+FROM category_products_total_sales
+WHERE (category_id, total_sales) IN (SELECT
+							category_id,
+							MAX(total_sales)
+						FROM category_products_total_sales
+                        GROUP BY category_id, category_name) -- 여기서 카테고리 아이디까지 비교해야한다.
+-- 만약에 total_sales로만 비교하면 문제가 되는게 전자기기, 도서에서 둘다 200000인 경우가 있으면 두 경우가 다 조회된다.
+ORDER BY category_id ASC, product_id ASC;
+
+
+/*
 SELECT
 	c.category_id,
 	c.category_name,
@@ -923,6 +969,7 @@ JOIN (SELECT
 		JOIN categories c2 ON p2.category_id = c2.category_id
         GROUP BY c2.category_id, c2.category_name, p2.product_name
         ORDER BY c2.category_id ASC, total_sales DESC) cmp ON c.category_id = cmp.category_id;
+*/
 
 SELECT *
 FROM products;
